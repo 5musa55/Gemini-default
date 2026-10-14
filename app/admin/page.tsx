@@ -38,7 +38,7 @@ export default function AdminPage() {
         .select(
           `
           *,
-          profiles:user_id (
+          profiles (
             id,
             email,
             full_name,
@@ -49,10 +49,30 @@ export default function AdminPage() {
         )
         .order("created_at", { ascending: false });
 
-      if (listingsError) {
-        console.error("Chyba při načítání inzerátů pro admina:", listingsError);
-      } else if (listingsData) {
+      if (!listingsError && listingsData) {
         setListings(listingsData as ListingWithProfile[]);
+      } else {
+        const { data: fallbackData } = await supabase
+          .from("listings")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (fallbackData) {
+          const userIds = [
+            ...new Set(fallbackData.map((l: ListingWithProfile) => l.user_id)),
+          ];
+          const { data: profs } = await supabase
+            .from("profiles")
+            .select("id, email, full_name, phone, university")
+            .in("id", userIds);
+
+          const pMap = new Map((profs || []).map((p: { id: string }) => [p.id, p]));
+          const comb = fallbackData.map((item: ListingWithProfile) => ({
+            ...item,
+            profiles: pMap.get(item.user_id) || null,
+          }));
+          setListings(comb as ListingWithProfile[]);
+        }
       }
 
       // 2. Fetch all profiles

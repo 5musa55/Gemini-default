@@ -3,8 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "build:css": "node scripts/build-css.mjs",
+    "predev": "node scripts/build-css.mjs",
+    "prebuild": "node scripts/build-css.mjs",
     "dev": "next dev",
-    "build": "next build --webpack",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },

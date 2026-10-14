@@ -35,13 +35,15 @@ export default function ListingDetailPage() {
 
   const fetchListingDetail = React.useCallback(async (id: string) => {
     setLoading(true);
+    setError(null);
     try {
+      // 1. Try with joined profiles
       const { data, error } = await supabase
         .from("listings")
         .select(
           `
           *,
-          profiles:user_id (
+          profiles (
             id,
             email,
             full_name,
@@ -53,10 +55,30 @@ export default function ListingDetailPage() {
         .eq("id", id)
         .single();
 
-      if (error || !data) {
-        setError("Inzerát nebyl nalezen nebo byl již odstraněn.");
-      } else {
+      if (!error && data) {
         setListing(data as ListingWithProfile);
+      } else {
+        // Fallback: fetch listing directly, then fetch profile
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from("listings")
+          .select("*")
+          .eq("id", id)
+          .single();
+
+        if (fallbackError || !fallbackData) {
+          setError("Inzerát nebyl nalezen nebo byl již odstraněn.");
+        } else {
+          const { data: profileData } = await supabase
+            .from("profiles")
+            .select("id, email, full_name, phone, university")
+            .eq("id", fallbackData.user_id)
+            .single();
+
+          setListing({
+            ...fallbackData,
+            profiles: profileData || null,
+          } as ListingWithProfile);
+        }
       }
     } catch (err) {
       console.error("Chyba při načítání detailu:", err);

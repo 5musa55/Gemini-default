@@ -18,12 +18,13 @@ export default function HomePage() {
   const fetchListings = React.useCallback(async () => {
     setLoading(true);
     try {
+      // 1. Try with joined profiles
       const { data, error } = await supabase
         .from("listings")
         .select(
           `
           *,
-          profiles:user_id (
+          profiles (
             id,
             email,
             full_name,
@@ -34,10 +35,33 @@ export default function HomePage() {
         )
         .order("created_at", { ascending: false });
 
-      if (error) {
-        console.error("Chyba při načítání inzerátů:", error);
-      } else if (data) {
+      if (!error && data) {
         setListings(data as ListingWithProfile[]);
+      } else {
+        // Fallback: fetch listings directly if relationship join has schema cache delay
+        const { data: fallbackData } = await supabase
+          .from("listings")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (fallbackData) {
+          const userIds = [
+            ...new Set(fallbackData.map((l: ListingWithProfile) => l.user_id)),
+          ];
+          const { data: profilesData } = await supabase
+            .from("profiles")
+            .select("id, email, full_name, phone, university")
+            .in("id", userIds);
+
+          const profileMap = new Map(
+            (profilesData || []).map((p: { id: string }) => [p.id, p])
+          );
+          const combined = fallbackData.map((item: ListingWithProfile) => ({
+            ...item,
+            profiles: profileMap.get(item.user_id) || null,
+          }));
+          setListings(combined as ListingWithProfile[]);
+        }
       }
     } catch (err) {
       console.error("Chyba:", err);
